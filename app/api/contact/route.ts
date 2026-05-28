@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server";
+import { Resend } from "resend";
+
+import {
+  ContactInquiryEmail,
+  type ContactInquiryEmailValues,
+} from "@/app/emails/contact-inquiry-email";
 
 export const runtime = "nodejs";
 
-const RESEND_API_URL = "https://api.resend.com/emails";
-
-type ContactPayload = {
-  brandProduct: string;
-  budgetRange: string;
-  email: string;
-  message: string;
-  name: string;
-  timeline: string;
-  videoLength: string;
-};
+type ContactPayload = ContactInquiryEmailValues;
 
 const fieldLabels: Record<keyof ContactPayload, string> = {
   brandProduct: "Brand / Product",
@@ -54,18 +50,19 @@ export async function POST(request: Request) {
   }
 
   const apiKey = firstNonEmpty(process.env.RESEND_API_KEY);
-  const configuredFromEmail = firstNonEmpty(process.env.CONTACT_FROM_EMAIL);
   const fromEmail =
-    configuredFromEmail ?? "AstvileLabs <onboarding@resend.dev>";
+    firstNonEmpty(process.env.CONTACT_FROM_EMAIL) ??
+    "AstvileLabs <onboarding@resend.dev>";
   const toEmail = firstNonEmpty(process.env.CONTACT_TO_EMAIL);
-  const missingEmailConfig = [
-    ["RESEND_API_KEY", apiKey],
-    ["CONTACT_TO_EMAIL", toEmail],
-  ]
-    .filter(([, value]) => !value)
-    .map(([key]) => key);
 
-  if (missingEmailConfig.length > 0) {
+  if (!apiKey || !toEmail) {
+    const missingEmailConfig = [
+      ["RESEND_API_KEY", apiKey],
+      ["CONTACT_TO_EMAIL", toEmail],
+    ]
+      .filter(([, value]) => !value)
+      .map(([key]) => key);
+
     console.warn("Contact email delivery is not configured.", {
       missing: missingEmailConfig,
     });
@@ -78,25 +75,27 @@ export async function POST(request: Request) {
     );
   }
 
-  const emailResponse = await fetch(RESEND_API_URL, {
-    body: JSON.stringify({
+  try {
+    const resend = new Resend(apiKey);
+    const { error } = await resend.emails.send({
       from: fromEmail,
-      html: buildHtmlEmail(values),
-      reply_to: values.email,
+      react: ContactInquiryEmail({ values }),
+      replyTo: values.email,
       subject: `AstvileLabs project inquiry from ${values.name}`,
       text: buildTextEmail(values),
       to: toEmail,
-    }),
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-  });
+    });
 
-  if (!emailResponse.ok) {
-    const resendError = await emailResponse.text();
-    console.error("Resend email failed:", resendError);
+    if (error) {
+      console.error("Resend email failed:", error);
+
+      return NextResponse.json(
+        { error: "Email delivery failed. Please try again in a moment." },
+        { status: 502 },
+      );
+    }
+  } catch (error) {
+    console.error("Contact email delivery failed:", error);
 
     return NextResponse.json(
       { error: "Email delivery failed. Please try again in a moment." },
@@ -153,49 +152,3 @@ function buildTextEmail(values: ContactPayload) {
   ].join("\n");
 }
 
-function buildHtmlEmail(values: ContactPayload) {
-  const rows = [
-    ["Name", values.name],
-    ["Email", values.email],
-    ["Brand / Product", values.brandProduct],
-    ["Video Length", values.videoLength],
-    ["Budget Range", values.budgetRange],
-    ["Timeline", values.timeline],
-  ];
-
-  return `
-    <div style="font-family: Arial, sans-serif; color: #111; line-height: 1.6;">
-      <p style="font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #666;">
-        AstvileLabs Contact Form
-      </p>
-      <h1 style="font-size: 24px; margin: 0 0 20px;">New project inquiry</h1>
-      <table style="border-collapse: collapse; width: 100%; max-width: 620px;">
-        ${rows
-          .map(
-            ([label, value]) => `
-              <tr>
-                <td style="border: 1px solid #ddd; padding: 10px; width: 180px; color: #555;">
-                  ${escapeHtml(label)}
-                </td>
-                <td style="border: 1px solid #ddd; padding: 10px;">
-                  ${escapeHtml(value)}
-                </td>
-              </tr>
-            `,
-          )
-          .join("")}
-      </table>
-      <h2 style="font-size: 16px; margin: 24px 0 8px;">Message</h2>
-      <p style="white-space: pre-wrap; margin: 0;">${escapeHtml(values.message)}</p>
-    </div>
-  `;
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
