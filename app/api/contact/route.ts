@@ -57,12 +57,7 @@ export async function POST(request: Request) {
   const configuredFromEmail = firstNonEmpty(process.env.CONTACT_FROM_EMAIL);
   const fromEmail =
     configuredFromEmail ?? "AstvileLabs <onboarding@resend.dev>";
-  const toEmail = firstNonEmpty(
-    process.env.CONTACT_TO_EMAIL,
-    process.env.RESEND_TO_EMAIL,
-    process.env.NEXT_PUBLIC_CONTACT_TO_EMAIL,
-    extractEmailAddress(configuredFromEmail),
-  );
+  const toEmail = firstNonEmpty(process.env.CONTACT_TO_EMAIL);
   const missingEmailConfig = [
     ["RESEND_API_KEY", apiKey],
     ["CONTACT_TO_EMAIL", toEmail],
@@ -140,11 +135,6 @@ function toCleanString(value: unknown) {
 
 function firstNonEmpty(...values: Array<string | undefined>) {
   return values.map((value) => value?.trim()).find(Boolean);
-}
-
-function extractEmailAddress(value: string | undefined) {
-  const email = value?.match(/<([^<>@\s]+@[^<>@\s]+\.[^<>@\s]+)>/)?.[1] ?? value;
-  return email && /^\S+@\S+\.\S+$/.test(email) ? email : undefined;
 }
 
 function buildTextEmail(values: ContactPayload) {
