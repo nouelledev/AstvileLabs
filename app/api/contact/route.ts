@@ -53,16 +53,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = readEnv("RESEND_API_KEY");
   const fromEmail =
-    process.env.CONTACT_FROM_EMAIL ?? "AstvileLabs <onboarding@resend.dev>";
-  const toEmail = process.env.CONTACT_TO_EMAIL;
+    readEnv("CONTACT_FROM_EMAIL") ?? "AstvileLabs <onboarding@resend.dev>";
+  const toEmail = readEnv("CONTACT_TO_EMAIL");
 
   if (!apiKey || !toEmail) {
     return NextResponse.json(
       {
         error:
-          "Email delivery is not configured yet. Add RESEND_API_KEY and CONTACT_TO_EMAIL to .env.local.",
+          "Email delivery is not configured yet. Add RESEND_API_KEY and CONTACT_TO_EMAIL to your deployment environment, or .env.local for local development.",
       },
       { status: 503 },
     );
@@ -121,6 +121,11 @@ function findMissingField(values: ContactPayload): keyof ContactPayload | null {
 
 function toCleanString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function readEnv(key: string) {
+  const value = process.env[key]?.trim();
+  return value ? value : undefined;
 }
 
 function buildTextEmail(values: ContactPayload) {
