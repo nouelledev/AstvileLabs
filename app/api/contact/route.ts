@@ -57,12 +57,21 @@ export async function POST(request: Request) {
   const fromEmail =
     readEnv("CONTACT_FROM_EMAIL") ?? "AstvileLabs <onboarding@resend.dev>";
   const toEmail = readEnv("CONTACT_TO_EMAIL");
+  const missingEmailConfig = [
+    ["RESEND_API_KEY", apiKey],
+    ["CONTACT_TO_EMAIL", toEmail],
+  ]
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
 
-  if (!apiKey || !toEmail) {
+  if (missingEmailConfig.length > 0) {
+    console.warn("Contact email delivery is not configured.", {
+      missing: missingEmailConfig,
+    });
+
     return NextResponse.json(
       {
-        error:
-          "Email delivery is not configured yet. Add RESEND_API_KEY and CONTACT_TO_EMAIL to your deployment environment, or .env.local for local development.",
+        error: `Email delivery is not configured yet. Missing: ${missingEmailConfig.join(", ")}. Add RESEND_API_KEY and CONTACT_TO_EMAIL to your deployment environment, or .env.local for local development.`,
       },
       { status: 503 },
     );
