@@ -81,7 +81,7 @@ export function ContactSection() {
         shouldValidate: true,
       });
 
-      toast.success("Package added to contact form", {
+      toast.success("Engagement added to contact form", {
         description: "Add your email and brand details, then send it over.",
       });
 
